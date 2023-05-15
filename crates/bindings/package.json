@@ -1,0 +1,22 @@
+{
+  "name": "early_return_bindings",
+  "version": "0.1.0",
+  "main": "dist/index.node",
+  "types": "index.d.ts",
+  "files": [
+    "dist/index.node",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "build": "cargo-cp-artifact -a cdylib early_return_bindings dist/index2.node -- cargo build --message-format=json-render-diagnostics",
+    "build-debug": "npm run build --",
+    "build-release": "npm run build -- --release",
+    "install": "npm run build-release",
+    "test": "cargo test"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cargo-cp-artifact": "^0.1"
+  }
+}
