@@ -57,12 +57,12 @@ mod tests {
         check(
             "foo.$",
             r#"
-        const EARLY_RETURN = Symbol();
-        const __unwrap = x => {
-            if (x.isOk) return x.value;
-            throw { [EARLY_RETURN]: x };
-        };
-        __unwrap(foo);
+            const EARLY_RETURN = Symbol();
+            const __unwrap = x => {
+                if (x.isOk) return x.value;
+                throw { [EARLY_RETURN]: x };
+            };
+            __unwrap(foo);
         "#,
         );
     }
@@ -160,6 +160,43 @@ mod tests {
                     throw e;
                 }
             }
+            "#,
+        )
+    }
+
+    #[test]
+    fn inside_iife() {
+        check(
+            r#"
+                (function main() {
+                    () => a.$ + b.$;
+                    () => c.$ + d.$;
+                })();
+            "#,
+            r#"
+            const EARLY_RETURN = Symbol();
+            const __unwrap = x => {
+                if (x.isOk) return x.value;
+                throw { [EARLY_RETURN]: x };
+            };
+            (function main() {
+                () => {
+                    try {
+                        return __unwrap(a) + __unwrap(b);
+                    } catch (e) {
+                        if (EARLY_RETURN in e) return e[EARLY_RETURN];
+                        throw e;
+                    }
+                };
+                () => {
+                    try {
+                        return __unwrap(c) + __unwrap(d);
+                    } catch (e) {
+                        if (EARLY_RETURN in e) return e[EARLY_RETURN];
+                        throw e;
+                    }
+                };
+            })();
             "#,
         )
     }

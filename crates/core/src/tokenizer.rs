@@ -22,6 +22,7 @@ mod kinds {
     }
 }
 
+#[derive(Debug)]
 pub enum Token {
     PropertyAccess {
         object: Range<usize>,
@@ -29,9 +30,11 @@ pub enum Token {
         property: Range<usize>,
     },
     Function {
+        func: Range<usize>,
         body: Range<usize>,
     },
     ArrowExprFunction {
+        func: Range<usize>,
         body: Range<usize>,
     },
 }
@@ -44,10 +47,12 @@ fn insert_early_return_mechanism(function_decl: Node) -> Token {
         let r_brace = body.child(body.child_count() - 1).unwrap();
 
         Token::Function {
+            func: function_decl.byte_range(),
             body: l_brace.end_byte()..r_brace.start_byte(),
         }
     } else {
         Token::ArrowExprFunction {
+            func: function_decl.byte_range(),
             body: body.byte_range(),
         }
     }
@@ -83,7 +88,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         let mut curr = member_expr;
         while let Some(parent) = curr.parent() {
             curr = parent;
-            if kinds::is_func(curr.kind_id()) && !func_visited.contains(&curr.id()) {
+            if kinds::is_func(curr.kind_id()) {
+                if func_visited.contains(&curr.id()) {
+                    break;
+                }
+
                 func_visited.insert(curr.id());
 
                 let token = insert_early_return_mechanism(curr);

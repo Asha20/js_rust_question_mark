@@ -53,20 +53,23 @@ impl<'a> QuestionMarkOperator<'a> {
         }
     }
 
-    fn definition(&self) -> String {
-        format!(
-            r#"
-            const {symbol} = Symbol();
-            const {unwrap_fn} = x => {{
-                if ({condition}) return {unwrapped};
-                throw {{ [{symbol}]: x }};
-            }};
-        "#,
-            symbol = self.symbol_name(),
-            unwrap_fn = self.unwrap_name(),
-            condition = self.config.value_check,
-            unwrapped = self.config.unwrap,
-        )
+    fn definition(&self, start: usize) -> Vec<StringOp> {
+        vec![StringOp::insert(
+            start,
+            format!(
+                r#"
+                    const {symbol} = Symbol();
+                    const {unwrap_fn} = x => {{
+                        if ({condition}) return {unwrapped};
+                        throw {{ [{symbol}]: x }};
+                    }};
+                "#,
+                symbol = self.symbol_name(),
+                unwrap_fn = self.unwrap_name(),
+                condition = self.config.value_check,
+                unwrapped = self.config.unwrap,
+            ),
+        )]
     }
 
     fn mechanism(&self, range: Range<usize>) -> Vec<StringOp> {
@@ -135,7 +138,7 @@ impl<'a> StringModifier<'a> {
         }
     }
 
-    fn add_operator(&mut self, op: StringOp<'a>) {
+    fn add_operation(&mut self, op: StringOp<'a>) {
         let offset = match &op {
             StringOp::Insert(_, s) => s.len() as isize,
             StringOp::Delete(range) => range.start as isize - range.end as isize,
@@ -153,19 +156,19 @@ impl<'a> StringModifier<'a> {
                 property,
             } => {
                 for op in qm.question_mark(object) {
-                    self.add_operator(op);
+                    self.add_operation(op);
                 }
-                self.add_operator(StringOp::Delete(dot));
-                self.add_operator(StringOp::Delete(property));
+                self.add_operation(StringOp::Delete(dot));
+                self.add_operation(StringOp::Delete(property));
             }
-            Token::Function { body } => {
+            Token::Function { body, .. } => {
                 for op in qm.mechanism(body) {
-                    self.add_operator(op);
+                    self.add_operation(op);
                 }
             }
-            Token::ArrowExprFunction { body } => {
+            Token::ArrowExprFunction { body, .. } => {
                 for op in qm.expr_mechanism(body) {
-                    self.add_operator(op);
+                    self.add_operation(op);
                 }
             }
         }
@@ -201,24 +204,23 @@ impl<'a> StringModifier<'a> {
 
 pub fn process<'a>(input: &'a str, qm: &QuestionMarkOperator, tokens: Vec<Token>) -> Cow<'a, str> {
     let mut modifier = StringModifier::new();
-    for token in tokens {
-        modifier.add_token(qm, token)
+
+    let mechanism_def_start =
+        if input.starts_with("\"use strict\"") || input.starts_with("'use strict'") {
+            12
+        } else {
+            0
+        };
+
+    if !tokens.is_empty() {
+        for op in qm.definition(mechanism_def_start) {
+            modifier.add_operation(op);
+        }
     }
 
-    let result = modifier.modify(input);
+    for token in tokens {
+        modifier.add_token(qm, token);
+    }
 
-    let Cow::Owned(result) = result else {
-        return result;
-    };
-
-    let start_point = if result.starts_with("\"use strict\"") || result.starts_with("'use strict'")
-    {
-        12
-    } else {
-        0
-    };
-
-    Cow::Owned(
-        result[0..start_point].to_string() + qm.definition().as_str() + &result[start_point..],
-    )
+    modifier.modify(input)
 }
