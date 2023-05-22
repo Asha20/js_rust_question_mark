@@ -12,47 +12,9 @@ const MANGLE_ALPHABET: [char; 62] = [
 const EARLY_RETURN_SYMBOL_NAME: &str = "EARLY_RETURN";
 const QUESTION_MARK_FUNC_NAME: &str = "__unwrap";
 
-pub enum Modifier<'a> {
-    Function(Cow<'a, str>),
-    Property(Cow<'a, str>),
-    Method(Cow<'a, str>),
-}
-impl<'a> Modifier<'a> {
-    pub fn function<I: Into<Cow<'a, str>>>(s: I) -> Self {
-        Self::Function(s.into())
-    }
-
-    pub fn property<I: Into<Cow<'a, str>>>(s: I) -> Self {
-        Self::Property(s.into())
-    }
-
-    pub fn method<I: Into<Cow<'a, str>>>(s: I) -> Self {
-        Self::Method(s.into())
-    }
-
-    fn get_string(&self, s: &str) -> String {
-        match self {
-            Self::Function(func) => format!("{func}({s})"),
-            Self::Property(prop) => format!("{s}.{prop}"),
-            Self::Method(method) => format!("{s}.{method}()"),
-        }
-    }
-
-    fn get_string_ops(&self, range: Range<usize>) -> Vec<StringOp<'static>> {
-        match self {
-            Self::Function(func) => vec![
-                StringOp::insert(range.start, format!("{func}(")),
-                StringOp::insert(range.end, ")"),
-            ],
-            Self::Property(prop) => vec![StringOp::insert(range.end, format!(".{prop}"))],
-            Self::Method(method) => vec![StringOp::insert(range.end, format!(".{method}()"))],
-        }
-    }
-}
-
 pub struct Config<'a> {
-    pub value_check: Modifier<'a>,
-    pub unwrap: Modifier<'a>,
+    pub value_check: Cow<'a, str>,
+    pub unwrap: Cow<'a, str>,
     pub mangle: bool,
 }
 
@@ -75,7 +37,7 @@ impl<'a> QuestionMarkOperator<'a> {
         }
     }
 
-    fn symbol_name(&self) -> Cow<'static, str> {
+    fn symbol_name(&self) -> Cow<str> {
         if let Some(suffix) = &self.mangle_suffix {
             Cow::Owned(format!("{EARLY_RETURN_SYMBOL_NAME}_{}", suffix))
         } else {
@@ -83,7 +45,7 @@ impl<'a> QuestionMarkOperator<'a> {
         }
     }
 
-    fn unwrap_name(&self) -> Cow<'static, str> {
+    fn unwrap_name(&self) -> Cow<str> {
         if let Some(suffix) = &self.mangle_suffix {
             Cow::Owned(format!("{QUESTION_MARK_FUNC_NAME}_{}", suffix))
         } else {
@@ -102,8 +64,8 @@ impl<'a> QuestionMarkOperator<'a> {
         "#,
             symbol = self.symbol_name(),
             unwrap_fn = self.unwrap_name(),
-            condition = self.config.value_check.get_string("x"),
-            unwrapped = self.config.unwrap.get_string("x"),
+            condition = self.config.value_check,
+            unwrapped = self.config.unwrap,
         )
     }
 
@@ -120,9 +82,11 @@ impl<'a> QuestionMarkOperator<'a> {
         ]
     }
 
-    fn question_mark(&self, range: Range<usize>) -> Vec<StringOp<'static>> {
-        let modifier = Modifier::Function(self.unwrap_name());
-        modifier.get_string_ops(range)
+    fn question_mark(&self, range: Range<usize>) -> Vec<StringOp> {
+        vec![
+            StringOp::insert(range.start, format!("{func}(", func = self.unwrap_name())),
+            StringOp::insert(range.end, ")"),
+        ]
     }
 }
 
@@ -225,9 +189,18 @@ pub fn process<'a>(input: &'a str, qm: &QuestionMarkOperator, tokens: Vec<Token>
 
     let result = modifier.modify(input);
 
-    if let Cow::Owned(result) = result {
-        Cow::Owned(qm.definition() + result.as_str())
+    let Cow::Owned(result) = result else {
+        return result;
+    };
+
+    let start_point = if result.starts_with("\"use strict\"") || result.starts_with("'use strict'")
+    {
+        12
     } else {
-        result
-    }
+        0
+    };
+
+    Cow::Owned(
+        result[0..start_point].to_string() + qm.definition().as_str() + &result[start_point..],
+    )
 }

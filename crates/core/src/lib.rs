@@ -12,20 +12,20 @@ pub fn process<'a>(s: &'a str, config: Config) -> Cow<'a, str> {
     result
 }
 
-pub use replacer::{Config, Modifier};
+pub use replacer::Config;
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{borrow::Cow, path::Path};
 
-    use crate::{process, Config, Modifier};
+    use crate::{process, Config};
 
     fn check(input: &str, output: &str) {
         use dprint_plugin_typescript::configuration::ConfigurationBuilder;
 
         let config = Config {
-            value_check: Modifier::property("isOk"),
-            unwrap: Modifier::property("value"),
+            value_check: Cow::Borrowed("x.isOk"),
+            unwrap: Cow::Borrowed("x.value"),
             mangle: false,
         };
 

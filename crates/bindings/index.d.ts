@@ -1,11 +1,6 @@
-export interface Accessor {
-  kind: "function" | "property" | "method";
-  value: string;
-}
-
 export interface Config {
-  valueCheck: Accessor;
-  unwrap: Accessor;
+  valueCheck: (x: any) => any;
+  unwrap: (x: any) => any;
   mangle?: boolean;
 }
 
