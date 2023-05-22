@@ -9,6 +9,7 @@ mod fields {
 }
 
 mod kinds {
+    pub const STATEMENT_BLOCK: u16 = 178;
     pub const FUNC_EXPR: u16 = 218;
     pub const FUNC_DECL: u16 = 219;
     pub const GEN_EXPR: u16 = 220;
@@ -30,16 +31,26 @@ pub enum Token {
     Function {
         body: Range<usize>,
     },
+    ArrowExprFunction {
+        body: Range<usize>,
+    },
 }
 
-// TODO: Handle case where arrow function returns an expression, not a statement block.
-//       Example: () => a.$ + b.$
-fn insert_early_return_mechanism(function_decl: Node) -> (usize, usize) {
+fn insert_early_return_mechanism(function_decl: Node) -> Token {
     let body = function_decl.child_by_field_id(fields::BODY).unwrap();
-    let l_brace = body.child(0).unwrap();
-    let r_brace = body.child(body.child_count() - 1).unwrap();
 
-    (l_brace.end_byte(), r_brace.start_byte())
+    if body.kind_id() == kinds::STATEMENT_BLOCK {
+        let l_brace = body.child(0).unwrap();
+        let r_brace = body.child(body.child_count() - 1).unwrap();
+
+        Token::Function {
+            body: l_brace.end_byte()..r_brace.start_byte(),
+        }
+    } else {
+        Token::ArrowExprFunction {
+            body: body.byte_range(),
+        }
+    }
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -69,23 +80,23 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         let dot = member_expr.child(1).unwrap();
         let prop = member_expr.child_by_field_id(fields::PROPERTY).unwrap();
 
-        tokens.push(Token::PropertyAccess {
-            object: object.byte_range(),
-            dot: dot.byte_range(),
-            property: prop.byte_range(),
-        });
-
         let mut curr = member_expr;
         while let Some(parent) = curr.parent() {
             curr = parent;
             if kinds::is_func(curr.kind_id()) && !func_visited.contains(&curr.id()) {
                 func_visited.insert(curr.id());
 
-                let (begin, end) = insert_early_return_mechanism(curr);
-                tokens.push(Token::Function { body: begin..end });
+                let token = insert_early_return_mechanism(curr);
+                tokens.push(token);
                 break;
             }
         }
+
+        tokens.push(Token::PropertyAccess {
+            object: object.byte_range(),
+            dot: dot.byte_range(),
+            property: prop.byte_range(),
+        });
     }
 
     tokens

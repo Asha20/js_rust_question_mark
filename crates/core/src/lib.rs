@@ -139,4 +139,28 @@ mod tests {
         "#,
         );
     }
+
+    #[test]
+    fn arrow_function_that_returns_expr() {
+        check(
+            r#"
+                () => a.$ + b.$
+            "#,
+            r#"
+            const EARLY_RETURN = Symbol();
+            const __unwrap = x => {
+                if (x.isOk) return x.value;
+                throw { [EARLY_RETURN]: x };
+            };
+            () => {
+                try {
+                    return __unwrap(a) + __unwrap(b);
+                } catch (e) {
+                    if (EARLY_RETURN in e) return e[EARLY_RETURN];
+                    throw e;
+                }
+            }
+            "#,
+        )
+    }
 }

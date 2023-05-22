@@ -82,6 +82,19 @@ impl<'a> QuestionMarkOperator<'a> {
         ]
     }
 
+    fn expr_mechanism(&self, range: Range<usize>) -> Vec<StringOp> {
+        vec![
+            StringOp::insert(range.start, "{ try { return "),
+            StringOp::insert(
+                range.end,
+                format!(
+                    "}} catch (e) {{ if ({symbol} in e) return e[{symbol}]; throw e; }} }}",
+                    symbol = self.symbol_name()
+                ),
+            ),
+        ]
+    }
+
     fn question_mark(&self, range: Range<usize>) -> Vec<StringOp> {
         vec![
             StringOp::insert(range.start, format!("{func}(", func = self.unwrap_name())),
@@ -150,6 +163,11 @@ impl<'a> StringModifier<'a> {
                     self.add_operator(op);
                 }
             }
+            Token::ArrowExprFunction { body } => {
+                for op in qm.expr_mechanism(body) {
+                    self.add_operator(op);
+                }
+            }
         }
     }
 
@@ -159,7 +177,7 @@ impl<'a> StringModifier<'a> {
         }
 
         let mut result = String::with_capacity((source.len() as isize + self.op_size) as usize);
-        self.ops.sort_unstable_by_key(|x| x.start());
+        self.ops.sort_by_key(|x| x.start());
 
         let mut current = 0;
         for op in self.ops {
