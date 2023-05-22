@@ -30,8 +30,8 @@ fn process(mut cx: FunctionContext) -> JsResult<JsString> {
     let (mut cx, unwrap) = js_object_to_modifier(cx, unwrap)?;
 
     let mangle = config
-        .get::<JsBoolean, _, _>(&mut cx, "mangle")?
-        .value(&mut cx);
+        .get_opt::<JsBoolean, _, _>(&mut cx, "mangle")?
+        .map_or(false, |x| x.value(&mut cx));
 
     let config = Config {
         value_check,
