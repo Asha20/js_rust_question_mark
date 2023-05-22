@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+nanoid = "0.4.0"
 tree-sitter = "0.20.10"
 tree-sitter-traversal = "0.1.2"
 tree-sitter-typescript = "0.20.2"

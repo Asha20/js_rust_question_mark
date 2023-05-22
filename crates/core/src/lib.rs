@@ -26,7 +26,7 @@ mod tests {
         let config = Config {
             value_check: Modifier::property("isOk"),
             unwrap: Modifier::property("value"),
-            operator: Modifier::function("__unwrap"),
+            mangle: false,
         };
 
         let result = process(input.trim(), config);

@@ -177,6 +177,7 @@ name = "early_return_core"
 version = "0.1.0"
 dependencies = [
  "dprint-plugin-typescript",
+ "nanoid",
  "tree-sitter",
  "tree-sitter-traversal",
  "tree-sitter-typescript",
@@ -370,6 +371,15 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
+
+[[package]]
+name = "nanoid"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
+dependencies = [
+ "rand",
+]
 
 [[package]]
 name = "neon"

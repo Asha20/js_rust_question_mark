@@ -2,6 +2,16 @@ use std::{borrow::Cow, ops::Range};
 
 use crate::tokenizer::Token;
 
+const MANGLE_ALPHABET: [char; 62] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+    'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4',
+    '5', '6', '7', '8', '9',
+];
+
+const EARLY_RETURN_SYMBOL_NAME: &str = "EARLY_RETURN";
+const QUESTION_MARK_FUNC_NAME: &str = "__unwrap";
+
 pub enum Modifier<'a> {
     Function(Cow<'a, str>),
     Property(Cow<'a, str>),
@@ -28,7 +38,7 @@ impl<'a> Modifier<'a> {
         }
     }
 
-    fn get_string_ops(&self, range: Range<usize>) -> Vec<StringOp> {
+    fn get_string_ops(&self, range: Range<usize>) -> Vec<StringOp<'static>> {
         match self {
             Self::Function(func) => vec![
                 StringOp::insert(range.start, format!("{func}(")),
@@ -43,29 +53,57 @@ impl<'a> Modifier<'a> {
 pub struct Config<'a> {
     pub value_check: Modifier<'a>,
     pub unwrap: Modifier<'a>,
-    pub operator: Modifier<'a>,
+    pub mangle: bool,
 }
 
 pub struct QuestionMarkOperator<'a> {
     config: Config<'a>,
+    mangle_suffix: Option<String>,
 }
 
 impl<'a> QuestionMarkOperator<'a> {
     pub fn new(config: Config<'a>) -> Self {
-        Self { config }
+        let mangle_suffix = if config.mangle {
+            Some(nanoid::nanoid!(8, &MANGLE_ALPHABET))
+        } else {
+            None
+        };
+
+        Self {
+            config,
+            mangle_suffix,
+        }
+    }
+
+    fn symbol_name(&self) -> Cow<'static, str> {
+        if let Some(suffix) = &self.mangle_suffix {
+            Cow::Owned(format!("{EARLY_RETURN_SYMBOL_NAME}_{}", suffix))
+        } else {
+            Cow::Borrowed(EARLY_RETURN_SYMBOL_NAME)
+        }
+    }
+
+    fn unwrap_name(&self) -> Cow<'static, str> {
+        if let Some(suffix) = &self.mangle_suffix {
+            Cow::Owned(format!("{QUESTION_MARK_FUNC_NAME}_{}", suffix))
+        } else {
+            Cow::Borrowed(QUESTION_MARK_FUNC_NAME)
+        }
     }
 
     fn definition(&self) -> String {
         format!(
             r#"
-            const EARLY_RETURN = Symbol();
-            const __unwrap = x => {{
-                if ({condition}) return {unwrap};
-                throw {{ [EARLY_RETURN]: x }};
+            const {symbol} = Symbol();
+            const {unwrap_fn} = x => {{
+                if ({condition}) return {unwrapped};
+                throw {{ [{symbol}]: x }};
             }};
         "#,
+            symbol = self.symbol_name(),
+            unwrap_fn = self.unwrap_name(),
             condition = self.config.value_check.get_string("x"),
-            unwrap = self.config.unwrap.get_string("x")
+            unwrapped = self.config.unwrap.get_string("x"),
         )
     }
 
@@ -74,13 +112,17 @@ impl<'a> QuestionMarkOperator<'a> {
             StringOp::insert(range.start, "try {"),
             StringOp::insert(
                 range.end,
-                "} catch (e) { if (EARLY_RETURN in e) return e[EARLY_RETURN]; throw e; }",
+                format!(
+                    "}} catch (e) {{ if ({symbol} in e) return e[{symbol}]; throw e; }}",
+                    symbol = self.symbol_name()
+                ),
             ),
         ]
     }
 
-    fn question_mark(&self, range: Range<usize>) -> Vec<StringOp> {
-        self.config.operator.get_string_ops(range)
+    fn question_mark(&self, range: Range<usize>) -> Vec<StringOp<'static>> {
+        let modifier = Modifier::Function(self.unwrap_name());
+        modifier.get_string_ops(range)
     }
 }
 
@@ -178,7 +220,7 @@ impl<'a> StringModifier<'a> {
 pub fn process<'a>(input: &'a str, qm: &QuestionMarkOperator, tokens: Vec<Token>) -> Cow<'a, str> {
     let mut modifier = StringModifier::new();
     for token in tokens {
-        modifier.add_token(&qm, token)
+        modifier.add_token(qm, token)
     }
 
     let result = modifier.modify(input);

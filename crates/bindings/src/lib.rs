@@ -29,13 +29,14 @@ fn process(mut cx: FunctionContext) -> JsResult<JsString> {
     let unwrap = config.get::<JsObject, _, _>(&mut cx, "unwrap")?;
     let (mut cx, unwrap) = js_object_to_modifier(cx, unwrap)?;
 
-    let operator = config.get::<JsObject, _, _>(&mut cx, "operator")?;
-    let (mut cx, operator) = js_object_to_modifier(cx, operator)?;
+    let mangle = config
+        .get::<JsBoolean, _, _>(&mut cx, "mangle")?
+        .value(&mut cx);
 
     let config = Config {
         value_check,
         unwrap,
-        operator,
+        mangle,
     };
 
     let result = early_return_core::process(&input, config);
